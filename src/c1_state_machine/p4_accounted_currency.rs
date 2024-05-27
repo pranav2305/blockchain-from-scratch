@@ -45,7 +45,43 @@ impl StateMachine for AccountedCurrency {
     type Transition = AccountingTransaction;
 
     fn next_state(starting_state: &Balances, t: &AccountingTransaction) -> Balances {
-        todo!("Exercise 1")
+        let mut next_state = starting_state.clone();
+        let _ = match t {
+            AccountingTransaction::Burn { burner, amount } => {
+                if let Some(old_balance) = next_state.get_mut(burner) {
+                    if *old_balance > *amount {
+                        *old_balance -= amount;
+                    } else {
+                        next_state.remove(burner);
+                    }
+                }
+            }
+            AccountingTransaction::Mint { minter, amount } => {
+                if *amount > 0 {
+                    let old_balance = next_state.entry(*minter).or_insert(0);
+                    *old_balance += amount;
+                }
+            }
+            AccountingTransaction::Transfer {
+                sender,
+                receiver,
+                amount,
+            } => {
+                if *amount > 0 {
+                    if let Some(sender_balance) = next_state.get_mut(sender) {
+                        if *sender_balance >= *amount {
+                            *sender_balance -= amount;
+                            if *sender_balance == 0 {
+                                next_state.remove(sender);
+                            }
+                            let recv_balance = next_state.entry(*receiver).or_insert(0);
+                            *recv_balance += amount;
+                        }
+                    }
+                }
+            }
+        };
+        next_state
     }
 }
 

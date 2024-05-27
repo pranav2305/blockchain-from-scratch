@@ -3,7 +3,7 @@
 //! cash bills. Each bill has an amount and an owner, and can be spent in its entirety.
 //! When a state transition spends bills, new bills are created in lesser or equal amount.
 
-use super::{StateMachine, User};
+use super::{p6_open_ended::Transition, StateMachine, User};
 use std::collections::HashSet;
 
 /// This state machine models a multi-user currency system. It tracks a set of bills in
@@ -94,7 +94,53 @@ impl StateMachine for DigitalCashSystem {
     type Transition = CashTransaction;
 
     fn next_state(starting_state: &Self::State, t: &Self::Transition) -> Self::State {
-        todo!("Exercise 1")
+        let mut next_state = starting_state.clone();
+        let _ = match t {
+            CashTransaction::Mint { minter, amount } => next_state.add_bill(Bill {
+                owner: *minter,
+                amount: *amount,
+                serial: starting_state.next_serial(),
+            }),
+            CashTransaction::Transfer { spends, receives } => {
+                let mut invalid_tx = false;
+                let mut sent_amt = 0;
+                let mut recv_amt = 0;
+                let mut seen_serials = HashSet::new();
+                if spends.len() > 0 {
+                    for bill in spends {
+                        if !next_state.bills.contains(bill) || seen_serials.contains(&bill.serial) {
+                            invalid_tx = true;
+                        }
+                        sent_amt += bill.amount;
+                        seen_serials.insert(bill.serial);
+                    }
+                    if !invalid_tx {
+                        for bill in receives {
+                            if bill.amount <= 0
+                                || next_state.bills.contains(bill)
+                                || seen_serials.contains(&bill.serial)
+                                || bill.amount > sent_amt
+                                || bill.serial > next_state.next_serial() + receives.len() as u64
+                            {
+                                invalid_tx = true;
+                            }
+                            recv_amt += bill.amount;
+                            seen_serials.insert(bill.serial);
+                        }
+                    }
+
+                    if !invalid_tx && sent_amt >= recv_amt {
+                        for bill in spends {
+                            next_state.bills.remove(bill);
+                        }
+                        for bill in receives {
+                            next_state.add_bill(bill.clone())
+                        }
+                    }
+                }
+            }
+        };
+        next_state
     }
 }
 
