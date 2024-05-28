@@ -61,7 +61,7 @@ impl Header {
     /// the previous state, and the current state.
     fn verify_sub_chain(&self, chain: &[Header]) -> bool {
         let mut prev = self;
-        let mut state = 0;
+        let mut state = self.state;
         for i in 0..chain.len() {
             if chain[i].height != prev.height + 1 {
                 return false;
