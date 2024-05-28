@@ -76,19 +76,15 @@ impl Header {
         }
 
         if chain[0].parent != hash(self) {
-            println!("parent {} {}", chain[0].height, self.height);
             return false;
         }
         if chain[0].height != self.height + 1 {
-            println!("height");
             return false;
         }
         if chain[0].state != self.state + chain[0].extrinsic {
-            println!("state");
             return false;
         }
         if hash(&chain[0]) >= THRESHOLD {
-            println!("hash");
             return false;
         }
         chain[0].verify_sub_chain(&chain[1..])
@@ -396,7 +392,6 @@ fn bc_3_verify_forked_chain() {
     let g = &prefix[0];
     let full_even_chain = [&prefix[1..], &even].concat();
     let full_odd_chain = [&prefix[1..], &odd].concat();
-    println!("{:?}", full_even_chain);
 
     // Both chains are individually valid according to the original rules.
     assert!(g.verify_sub_chain(&full_even_chain[..]));

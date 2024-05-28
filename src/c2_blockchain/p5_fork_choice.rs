@@ -33,7 +33,13 @@ pub trait ForkChoice {
     /// two chains. Therefore this method has a provided implementation. However,
     /// it may be much more performant to write a fork-choice-specific implementation.
     fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
-        todo!("Exercise 1")
+        let mut curr_best = candidate_chains[0];
+        for chain in candidate_chains.iter().skip(1) {
+            if Self::first_chain_is_better(chain, curr_best) {
+                curr_best = chain;
+            }
+        }
+        curr_best
     }
 }
 
@@ -42,15 +48,15 @@ pub struct LongestChainRule;
 
 impl ForkChoice for LongestChainRule {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 1")
+        chain_1.len() > chain_2.len()
     }
 
-    fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
-        // Remember, this method is provided. You _can_ solve the exercise by
-        // simply deleting this block. It is up to you to decide whether this fork
-        // choice warrants a custom implementation.
-        todo!("Exercise 3")
-    }
+    // fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
+    //     // Remember, this method is provided. You _can_ solve the exercise by
+    //     // simply deleting this block. It is up to you to decide whether this fork
+    //     // choice warrants a custom implementation.
+    //     todo!("Exercise 3")
+    // }
 }
 
 /// The best chain is the one with the most accumulated work.
@@ -68,18 +74,34 @@ pub struct HeaviestChainRule;
 /// usage is that you create a block using the normal `Block.child()` method
 /// and then pass the block to this helper for additional mining.
 fn mine_extra_hard(block: &mut Block, threshold: u64) {
-    todo!("Exercise 4")
+    while block.header.consensus_digest < threshold {
+        block.header.consensus_digest += 1;
+        if hash(&block.header) < threshold {
+            break;
+        }
+    }
 }
 
 impl ForkChoice for HeaviestChainRule {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 5")
+        let mut chain1_work = 0;
+        let mut chain2_work = 0;
+
+        for block in chain_1 {
+            chain1_work += THRESHOLD - hash(block);
+        }
+
+        for block in chain_2 {
+            chain2_work += THRESHOLD - hash(block);
+        }
+
+        chain1_work > chain2_work
     }
 
-    fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
-        // Remember, this method is provided.
-        todo!("Exercise 6")
-    }
+    // fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
+    //     // Remember, this method is provided.
+    //     todo!("Exercise 6")
+    // }
 }
 /// The best chain is the one with the most blocks that have even hashes.
 ///
@@ -99,13 +121,20 @@ pub struct MostBlocksWithEvenHash;
 
 impl ForkChoice for MostBlocksWithEvenHash {
     fn first_chain_is_better(chain_1: &[Header], chain_2: &[Header]) -> bool {
-        todo!("Exercise 7")
+        let mut even_diff = 0;
+        for block in chain_1 {
+            if hash(block) % 2 == 0 {
+                even_diff += 1;
+            }
+        }
+        for block in chain_2 {
+            if hash(block) % 2 == 0 {
+                even_diff -= 1;
+            }
+        }
+        even_diff > 0
     }
 
-    fn best_chain<'a>(candidate_chains: &[&'a [Header]]) -> &'a [Header] {
-        // Remember, this method is provided.
-        todo!("Exercise 8")
-    }
 }
 
 // This lesson has omitted one popular fork choice rule:
@@ -131,7 +160,27 @@ impl ForkChoice for MostBlocksWithEvenHash {
 /// 2. The suffix chain which is longer (non-overlapping with the common prefix)
 /// 3. The suffix chain with more work (non-overlapping with the common prefix)
 fn create_fork_one_side_longer_other_side_heavier() -> (Vec<Header>, Vec<Header>, Vec<Header>) {
-    todo!("Exercise 9")
+    let mut init_chain = vec![Header::genesis()];
+    let mut state = 0;
+    for i in 1..3 {
+        state += i as u64;
+        init_chain.push(init_chain[i - 1].child(hash(&[i]), state));
+    }
+
+    let mut heavier_chain = init_chain.clone();
+    let mut heavier_block = Block {
+        header: heavier_chain[1].child(hash(&[2]), state + 2),
+        body: Vec::new(),
+    };
+    mine_extra_hard(&mut heavier_block, THRESHOLD);
+    heavier_chain.push(heavier_block.header);
+
+    let mut longer_chain = init_chain.clone();
+    for i in 3..5 {
+        state += i as u64;
+        longer_chain.push(longer_chain[i - 1].child(hash(&[i]), state));
+    }
+    (init_chain, longer_chain, heavier_chain)
 }
 
 #[test]
