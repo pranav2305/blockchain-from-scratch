@@ -4,6 +4,9 @@
 //! 1. Rules to throttle authoring. In this case we will use a simple PoW.
 //! 2. Arbitrary / Political rules. Here we will implement two alternate validity rules
 
+use core::panic;
+use std::cmp;
+
 use crate::hash;
 
 // We will use Rust's built-in hashing where the output type is u64. I'll make an alias
@@ -37,12 +40,30 @@ pub struct Header {
 impl Header {
     /// Returns a new valid genesis header.
     fn genesis() -> Self {
-        todo!("Exercise 1")
+        Header {
+            parent: 0,
+            height: 0,
+            extrinsic: 0,
+            state: 0,
+            consensus_digest: 0,
+        }
     }
 
     /// Create and return a valid child header.
     fn child(&self, extrinsic: u64) -> Self {
-        todo!("Exercise 2")
+        for i in 0..THRESHOLD {
+            let header = Header {
+                parent: hash(self),
+                height: self.height + 1,
+                extrinsic,
+                state: self.state + extrinsic,
+                consensus_digest: i,
+            };
+            if hash(&header) < THRESHOLD {
+                return header;
+            }
+        }
+        panic!("Failed to find a valid nonce");
     }
 
     /// Verify that all the given headers form a valid chain from this header to the tip.
@@ -50,7 +71,27 @@ impl Header {
     /// In addition to all the rules we had before, we now need to check that the block hash
     /// is below a specific threshold.
     fn verify_sub_chain(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 3")
+        if chain.len() == 0 {
+            return true;
+        }
+
+        if chain[0].parent != hash(self) {
+            println!("parent {} {}", chain[0].height, self.height);
+            return false;
+        }
+        if chain[0].height != self.height + 1 {
+            println!("height");
+            return false;
+        }
+        if chain[0].state != self.state + chain[0].extrinsic {
+            println!("state");
+            return false;
+        }
+        if hash(&chain[0]) >= THRESHOLD {
+            println!("hash");
+            return false;
+        }
+        chain[0].verify_sub_chain(&chain[1..])
     }
 
     // After the blockchain ran for a while, a political rift formed in the community.
@@ -62,13 +103,51 @@ impl Header {
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE EVEN.
     fn verify_sub_chain_even(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 4")
+        if chain.len() == 0 {
+            return true;
+        }
+
+        if chain[0].parent != hash(self) {
+            return false;
+        }
+        if chain[0].height != self.height + 1 {
+            return false;
+        }
+        if chain[0].state != self.state + chain[0].extrinsic {
+            return false;
+        }
+        if chain[0].height > FORK_HEIGHT && chain[0].state % 2 != 0 {
+            return false;
+        }
+        if hash(&chain[0]) >= THRESHOLD {
+            return false;
+        }
+        chain[0].verify_sub_chain_even(&chain[1..])
     }
 
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE ODD.
     fn verify_sub_chain_odd(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 5")
+        if chain.len() == 0 {
+            return true;
+        }
+
+        if chain[0].parent != hash(self) {
+            return false;
+        }
+        if chain[0].height != self.height + 1 {
+            return false;
+        }
+        if chain[0].state != self.state + chain[0].extrinsic {
+            return false;
+        }
+        if chain[0].height > FORK_HEIGHT && chain[0].state % 2 == 0 {
+            return false;
+        }
+        if hash(&chain[0]) >= THRESHOLD {
+            return false;
+        }
+        chain[0].verify_sub_chain_odd(&chain[1..])
     }
 }
 
@@ -89,7 +168,30 @@ impl Header {
 /// G -- 1 -- 2
 ///            \-- 3'-- 4'
 fn build_contentious_forked_chain() -> (Vec<Header>, Vec<Header>, Vec<Header>) {
-    todo!("Exercise 6")
+    let mut common_chain = vec![Header::genesis()];
+    for i in 1..=FORK_HEIGHT {
+        common_chain.push(common_chain[i as usize - 1].child(i));
+    }
+    let mut even_suffix = vec![common_chain[FORK_HEIGHT as usize].clone()];
+    let mut odd_suffix = vec![common_chain[FORK_HEIGHT as usize].clone()];
+
+    for _ in 0..2 {
+        even_suffix.push(even_suffix.last().unwrap().child(
+            if even_suffix.last().unwrap().state % 2 == 0 {
+                2
+            } else {
+                3
+            },
+        ));
+        odd_suffix.push(odd_suffix.last().unwrap().child(
+            if odd_suffix.last().unwrap().state % 2 == 0 {
+                3
+            } else {
+                2
+            },
+        ));
+    }
+    (common_chain, even_suffix[1..].to_vec(), odd_suffix[1..].to_vec())
 }
 
 // To run these tests: `cargo test bc_3`
@@ -294,6 +396,7 @@ fn bc_3_verify_forked_chain() {
     let g = &prefix[0];
     let full_even_chain = [&prefix[1..], &even].concat();
     let full_odd_chain = [&prefix[1..], &odd].concat();
+    println!("{:?}", full_even_chain);
 
     // Both chains are individually valid according to the original rules.
     assert!(g.verify_sub_chain(&full_even_chain[..]));
